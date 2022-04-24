@@ -82,7 +82,6 @@ def display_weather_details(args):
 def get_api_key():
     """Get API Key."""
     api_key = os.environ.get("WTR_OPEN_WEATHER_API_KEY")
-    api_key = "a89848f7e9cd7eec030baa48a693804f"
     return api_key
 
 
