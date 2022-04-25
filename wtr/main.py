@@ -2,17 +2,14 @@
 import argparse
 import os
 import time
-from time import sleep
 
 import requests
 from rich import print as rprint
-from rich.progress import track
 from rich.table import Table
 
 OPEN_WEATHER_API_BASE_URL = "https://api.openweathermap.org"
 OPEN_WEATHER_API_LOCATION_END_POINT = f"{OPEN_WEATHER_API_BASE_URL}/geo/1.0/direct"
 OPEN_WEATHER_API_WEATHER_END_POINT = f"{OPEN_WEATHER_API_BASE_URL}/data/2.5/onecall"
-CITY_NAME = None
 
 
 def main():
@@ -46,9 +43,11 @@ def display_weather_details(args):
         for city in args.location:
             if city.isalpha():
                 weather_report = get_weather_report(city, api_key)
-                table = Table(title="\nWeather forecast for {}\n".format(CITY_NAME if CITY_NAME else city.capitalize()))
+                CITY_NAME = city.capitalize()
+                table = Table(title=f"\nWeather forecast for {city.capitalize()}\n")
                 if weather_report is not None:
-                    table = get_display_table(table, args.week, city)
+                    CITY_NAME = weather_report["CITY_NAME"]
+                    table = get_display_table(table, args.week, city, CITY_NAME)
                     if table.columns and args.week:
                         for report in weather_report["daily"]:
                             table.add_row(
@@ -62,19 +61,12 @@ def display_weather_details(args):
                             weather_report["current"]["weather"][0]["description"].capitalize(),
                         )
                 if table.columns and table.rows:
-                    for _ in track(
-                        range(100),
-                        description=f"[green]Gathering data for {CITY_NAME if CITY_NAME else city.capitalize()}",
-                    ):
-                        if args.week:
-                            sleep(0.02)
-                        else:
-                            sleep(0.01)
                     rprint(table)
                 else:
-                    rprint("[i]Something went wrong, No data available...[/i]")
+                    rprint(f"[i]No data available for [b][red]{city}[/red][/b][/i]")
             else:
-                rprint("[i]Enter a valit city name [/i]")
+                rprint(f"[i]Enter a valid city name, {city} is not a valid input[/i]")
+                break
     else:
         rprint("[i]No API Key available to get weather report...[/i]")
 
@@ -101,36 +93,46 @@ def get_weather_report(city, api_key):
                 },
             )
             if response.ok:
-                return response.json()
+                try:
+                    response = response.json()
+                    response["CITY_NAME"] = location_details["CITY_NAME"]
+                except AttributeError:
+                    pass
+                return response
     except Exception:
-        return None
+        pass
     return None
 
 
 def get_location_details(city, api_key):
     """Get latitude and longitude for a specific city."""
     try:
-        response = requests.get(
-            OPEN_WEATHER_API_LOCATION_END_POINT,
-            params={"q": city, "appid": api_key},
-        )
-        if response.ok:
-            global CITY_NAME
-            location_details = {}
-            response = response.json()
-            if response:
-                CITY_NAME = f"{response[0]['name']}, {response[0]['state']}, {response[0]['country']}"
-                if response[0]["lat"] is not None:
-                    location_details["lat"] = response[0]["lat"]
-                if response[0]["lon"] is not None:
-                    location_details["lon"] = response[0]["lon"]
-                return location_details
+        if city and type(city) is str:
+            response = requests.get(
+                OPEN_WEATHER_API_LOCATION_END_POINT,
+                params={"q": city, "appid": api_key},
+            )
+            if response.ok:
+                location_details = {}
+                response = response.json()
+                try:
+                    if response:
+                        location_details[
+                            "CITY_NAME"
+                        ] = f"{response[0]['name']}, {response[0]['state']}, {response[0]['country']}"
+                        if response[0]["lat"] is not None:
+                            location_details["lat"] = response[0]["lat"]
+                        if response[0]["lon"] is not None:
+                            location_details["lon"] = response[0]["lon"]
+                        return location_details
+                except AttributeError:
+                    pass
     except Exception:
-        return None
+        pass
     return None
 
 
-def get_display_table(table, isWeek, city):
+def get_display_table(table, isWeek, city, CITY_NAME):
     """Get Table coloumn details to display."""
     if type(table) is not Table:
         table = Table(title="\nWeather forecast for {}\n".format(CITY_NAME if CITY_NAME else city.capitalize()))
